@@ -218,7 +218,7 @@ body.role-nv .admin-only{display:none!important}
 
     <!-- ============ THUỐC ============ -->
     <section class="page" id="page-thuoc">
-      <div class="page-title">Danh mục thuốc <button class="btn btn-primary admin-only" onclick="openThuoc()">＋ Thêm thuốc</button></div>
+      <div class="page-title">Danh mục thuốc <button class="btn btn-primary admin-only" onclick="openNhap()">＋ Nhập hàng</button></div>
       <div class="card">
         <div class="search-row">
           <input id="thuocSearch" placeholder="Tìm theo tên, hoạt chất, nhóm..." oninput="renderThuoc()">
@@ -408,6 +408,15 @@ body.role-nv .admin-only{display:none!important}
     <h3>Nhập hàng vào kho</h3>
     <div class="grid g2">
       <div style="grid-column:1/-1"><label>Thuốc *</label><select id="fN_thuoc"></select></div>
+      <div id="fN_newWrap" style="display:none;grid-column:1/-1;border:1px dashed var(--primary);border-radius:8px;padding:10px;background:var(--primary-light)">
+        <div class="grid g2">
+          <div style="grid-column:1/-1"><label>Tên thuốc mới *</label><input id="fNew_ten" placeholder="VD: Paracetamol 500mg"></div>
+          <div><label>Hoạt chất</label><input id="fNew_hc" placeholder="VD: Paracetamol"></div>
+          <div><label>Nhóm</label><select id="fNew_nhom"></select></div>
+          <div><label>Đơn vị</label><input id="fNew_dv" list="dsDV" placeholder="Viên / Vỉ / Hộp / Tuýp"></div>
+          <div><label>Tồn tối thiểu (cảnh báo)</label><input id="fNew_min" type="number" min="0" value="10"></div>
+        </div>
+      </div>
       <div><label>Số lô</label><input id="fN_lo" placeholder="VD: A2506"></div>
       <div><label>Hạn dùng *</label><input id="fN_hsd" type="date"></div>
       <div><label>Số lượng nhập *</label><input id="fN_sl" type="number" min="1"></div>
@@ -734,52 +743,75 @@ function renderThuoc(){
       <td>${isAdmin()?`<button class="btn btn-outline btn-sm" onclick="openThuoc('${t.id}')">Sửa</button>
       <button class="btn btn-ghost btn-sm" onclick="delThuoc('${t.id}')">🗑</button>`:''}</td></tr>`
     }).join('')
-  }).join(''):'<tr><td colspan="7" class="empty">Chưa có thuốc phù hợp — bấm "Thêm thuốc" để bắt đầu</td></tr>';
+  }).join(''):'<tr><td colspan="7" class="empty">Chưa có thuốc — bấm "＋ Nhập hàng" để thêm thuốc và nhập kho</td></tr>';
 }
 
 /* ================= KHO ================= */
 function openNhap(){
   const sel=document.getElementById('fN_thuoc');
-  if(!DB.thuoc.length){toast('Hãy thêm thuốc trước khi nhập kho');return}
-  // Gộp dropdown theo nhóm
+  const newWrap=document.getElementById('fN_newWrap');
+  // Dropdown: option "thuốc mới" đứng đầu + danh mục gộp theo nhóm
   const thuTu=dsNhomAll();const grp={};
   DB.thuoc.forEach(t=>{const n=t.nhom||'Khác';(grp[n]=grp[n]||[]).push(t)});
-  sel.innerHTML=Object.keys(grp).sort((a,b)=>thuTu.indexOf(a)-thuTu.indexOf(b)).map(n=>
+  sel.innerHTML=`<option value="__new__">＋ Thêm thuốc mới…</option>`+
+    Object.keys(grp).sort((a,b)=>thuTu.indexOf(a)-thuTu.indexOf(b)).map(n=>
     `<optgroup label="${nhomIcon(n)} ${esc(n)}">`+
     grp[n].sort((a,b)=>a.ten.localeCompare(b.ten,'vi')).map(t=>
       `<option value="${t.id}">${esc(t.ten)} (${esc(t.donVi)})</option>`).join('')+
     `</optgroup>`).join('');
-  fN_lo.value='';fN_hsd.value='';fN_sl.value='';fN_gkc.value='';fN_glt.value='';
+  // Nếu đã có thuốc thì mặc định chọn thuốc đầu tiên, chưa có thì vào thẳng chế độ thuốc mới
+  if(DB.thuoc.length)sel.selectedIndex=1;
+  fN_lo.value='';fN_hsd.value='';fN_sl.value='';fN_gn.value='';fN_gkc.value='';fN_glt.value='';
+  fNew_ten.value='';fNew_hc.value='';fNew_dv.value='';fNew_min.value=10;
+  fNew_nhom.innerHTML=dsNhomAll().map(n=>`<option value="${esc(n)}">${nhomIcon(n)} ${esc(n)}</option>`).join('');
+  fNew_nhom.value='Khác';
   const tinhGia=()=>{const gn=parseFloat(fN_gn.value)||0;
     fN_gkc.value=gn?Math.round(gn*1.3):'';
     fN_glt.value=gn?lamTron(gn*1.3):''};
-  sel.onchange=()=>{const t=DB.thuoc.find(x=>x.id===sel.value);fN_gn.value=t?t.giaNhap||'':'';tinhGia()};
+  sel.onchange=()=>{
+    const moi=sel.value==='__new__';
+    newWrap.style.display=moi?'block':'none';
+    if(moi){fN_gn.value='';tinhGia();fNew_ten.focus()}
+    else{const t=DB.thuoc.find(x=>x.id===sel.value);fN_gn.value=t?t.giaNhap||'':'';tinhGia()}
+  };
   fN_gn.oninput=tinhGia;
   fN_gkc.oninput=()=>{fN_glt.value=lamTron(parseFloat(fN_gkc.value)||0)};
   sel.onchange();
   document.getElementById('mdNhap').classList.add('open');
 }
 async function saveNhap(){
-  const tid=fN_thuoc.value,hsd=fN_hsd.value,sl=parseInt(fN_sl.value),gn=parseFloat(fN_gn.value);
+  const hsd=fN_hsd.value,sl=parseInt(fN_sl.value),gn=parseFloat(fN_gn.value);
   const gkc=parseFloat(fN_gkc.value)||Math.round(gn*1.3);
   const glt=parseFloat(fN_glt.value)||lamTron(gkc);
   if(!hsd){toast('Chưa nhập hạn dùng');return}
   if(!(sl>0)){toast('Số lượng phải > 0');return}
   if(!(gn>=0)){toast('Chưa nhập giá nhập');return}
+  const laThuocMoi=fN_thuoc.value==='__new__';
+  let tid=fN_thuoc.value,thuocMoi=null;
+  if(laThuocMoi){
+    const ten=fNew_ten.value.trim();
+    if(!ten){toast('Chưa nhập tên thuốc mới');return}
+    tid=genId('t');
+    thuocMoi={ten,hoatChat:fNew_hc.value.trim(),nhom:fNew_nhom.value||'Khác',
+      donVi:fNew_dv.value.trim()||'Viên',giaBan:glt,giaNhap:gn,
+      tonMin:parseInt(fNew_min.value)||0};
+  }
   const lo={thuocId:tid,soLo:fN_lo.value.trim()||'—',hanDung:hsd,soLuong:sl,slNhap:sl,
     giaNhap:gn,giaKC:gkc,giaLT:glt,ngayNhap:localDateISO()};
   const id=genId('l');
   try{
     if(CLOUD){
       const batch=fdb.batch();
+      if(laThuocMoi)batch.set(fdb.collection('thuoc').doc(tid),thuocMoi);
+      else batch.update(fdb.collection('thuoc').doc(tid),{giaNhap:gn,giaBan:glt});
       batch.set(fdb.collection('lo').doc(id),lo);
-      batch.update(fdb.collection('thuoc').doc(tid),{giaNhap:gn,giaBan:glt});
       await batch.commit();
     }
+    if(laThuocMoi){DB.thuoc.push({id:tid,...thuocMoi})}
+    else{const t=DB.thuoc.find(x=>x.id===tid);if(t){t.giaNhap=gn;t.giaBan=glt}}
     DB.lo.push({id,...lo});
-    const t=DB.thuoc.find(x=>x.id===tid);
-    if(t){t.giaNhap=gn;t.giaBan=glt}
-    save();closeModal('mdNhap');renderAll();toast('Đã nhập kho — giá bán cập nhật: '+fmt(glt));
+    save();closeModal('mdNhap');renderAll();
+    toast((laThuocMoi?'Đã thêm thuốc mới + nhập kho':'Đã nhập kho')+' — giá bán: '+fmt(glt));
   }catch(e){toast('❌ Lỗi nhập kho');console.warn(e)}
 }
 async function delLo(id){
