@@ -695,23 +695,26 @@ function openThuoc(id){
   bx.onclick=()=>{closeModal('mdThuoc');delThuoc(id)};
   m.classList.add('open');fT_ten.focus();
 }
+let DANG_LUU_T=false;
 async function saveThuoc(){
   const ten=fT_ten.value.trim();const gb=parseFloat(fT_gb.value);
   if(!ten){toast('Chưa nhập tên thuốc');return}
   if(!(gb>=0)){toast('Chưa nhập giá bán');return}
   const obj={ten,hoatChat:fT_hc.value.trim(),nhom:fT_nhom.value.trim(),donVi:fT_dv.value.trim()||'Viên',
     giaBan:gb,giaNhap:parseFloat(fT_gn.value)||0,tonMin:parseInt(fT_min.value)||0};
+  if(DANG_LUU_T)return;DANG_LUU_T=true;
   try{
     if(fT_id.value){
-      Object.assign(DB.thuoc.find(x=>x.id===fT_id.value),obj);
       if(CLOUD)await fdb.collection('thuoc').doc(fT_id.value).set(obj);
+      else{Object.assign(DB.thuoc.find(x=>x.id===fT_id.value),obj);save();renderAll()}
     }else{
       const id=genId('t');
-      DB.thuoc.push({id,...obj});
       if(CLOUD)await fdb.collection('thuoc').doc(id).set(obj);
+      else{DB.thuoc.push({id,...obj});save();renderAll()}
     }
-    save();closeModal('mdThuoc');renderAll();toast('Đã lưu thuốc');
+    closeModal('mdThuoc');toast('Đã lưu thuốc');
   }catch(e){toast('❌ Lỗi lưu — kiểm tra quyền/kết nối');console.warn(e)}
+  finally{DANG_LUU_T=false}
 }
 async function delThuoc(id){
   const t=DB.thuoc.find(x=>x.id===id);
@@ -722,9 +725,11 @@ async function delThuoc(id){
       batch.delete(fdb.collection('thuoc').doc(id));
       DB.lo.filter(l=>l.thuocId===id).forEach(l=>batch.delete(fdb.collection('lo').doc(l.id)));
       await batch.commit();
+    }else{
+      DB.thuoc=DB.thuoc.filter(x=>x.id!==id);DB.lo=DB.lo.filter(x=>x.thuocId!==id);
+      save();renderAll();
     }
-    DB.thuoc=DB.thuoc.filter(x=>x.id!==id);DB.lo=DB.lo.filter(x=>x.thuocId!==id);
-    save();renderAll();toast('Đã xóa');
+    toast('Đã xóa');
   }catch(e){toast('❌ Không xóa được');console.warn(e)}
 }
 function renderThuoc(){
@@ -784,6 +789,7 @@ function openNhap(){
   sel.onchange();
   document.getElementById('mdNhap').classList.add('open');
 }
+let DANG_NHAP=false;
 async function saveNhap(){
   const hsd=fN_hsd.value,sl=parseInt(fN_sl.value),gn=parseFloat(fN_gn.value);
   const gkc=parseFloat(fN_gkc.value)||Math.round(gn*1.3);
@@ -804,26 +810,32 @@ async function saveNhap(){
   const lo={thuocId:tid,soLo:fN_lo.value.trim()||'—',hanDung:hsd,soLuong:sl,slNhap:sl,
     giaNhap:gn,giaKC:gkc,giaLT:glt,ngayNhap:localDateISO()};
   const id=genId('l');
+  if(DANG_NHAP)return;DANG_NHAP=true;   // chống bấm đúp
   try{
     if(CLOUD){
+      // Chỉ ghi Firestore — snapshot đồng bộ về sẽ tự cập nhật giao diện (tránh hiển thị đúp)
       const batch=fdb.batch();
       if(laThuocMoi)batch.set(fdb.collection('thuoc').doc(tid),thuocMoi);
       else batch.update(fdb.collection('thuoc').doc(tid),{giaNhap:gn,giaBan:glt});
       batch.set(fdb.collection('lo').doc(id),lo);
       await batch.commit();
+    }else{
+      if(laThuocMoi){DB.thuoc.push({id:tid,...thuocMoi})}
+      else{const t=DB.thuoc.find(x=>x.id===tid);if(t){t.giaNhap=gn;t.giaBan=glt}}
+      DB.lo.push({id,...lo});
+      save();renderAll();
     }
-    if(laThuocMoi){DB.thuoc.push({id:tid,...thuocMoi})}
-    else{const t=DB.thuoc.find(x=>x.id===tid);if(t){t.giaNhap=gn;t.giaBan=glt}}
-    DB.lo.push({id,...lo});
-    save();closeModal('mdNhap');renderAll();
+    closeModal('mdNhap');
     toast((laThuocMoi?'Đã thêm thuốc mới + nhập kho':'Đã nhập kho')+' — giá bán: '+fmt(glt));
   }catch(e){toast('❌ Lỗi nhập kho');console.warn(e)}
+  finally{DANG_NHAP=false}
 }
 async function delLo(id){
   if(!confirm('Xóa lô này khỏi kho?'))return;
   try{
     if(CLOUD)await fdb.collection('lo').doc(id).delete();
-    DB.lo=DB.lo.filter(x=>x.id!==id);save();renderAll();toast('Đã xóa lô');
+    else{DB.lo=DB.lo.filter(x=>x.id!==id);save();renderAll()}
+    toast('Đã xóa lô');
   }catch(e){toast('❌ Không xóa được lô')}
 }
 function renderKho(){
@@ -939,11 +951,12 @@ async function thanhToan(inHD){
       loUpd.forEach(l=>batch.update(fdb.collection('lo').doc(l.id),{soLuong:l.soLuong}));
       batch.set(fdb.collection('hoadon').doc(hd.id),hd);
       await batch.commit();
+    }else{
+      DB.hoaDon.unshift(hd);save();renderAll();
     }
-    DB.hoaDon.unshift(hd);save();
     toast('✅ Đã thanh toán '+fmt(hd.tongTien));
     if(inHD)printHD(hd);
-    clearCart();renderAll();
+    clearCart();
   }catch(e){toast('❌ Lỗi thanh toán — thử lại');console.warn(e)}
   finally{DANG_TT=false}
 }
@@ -972,8 +985,10 @@ async function delHD(id){
     if(CLOUD){
       const h=DB.hoaDon.find(x=>x.id===id);
       await fdb.collection('hoadon').doc(h.docId||h.id).delete();
+    }else{
+      DB.hoaDon=DB.hoaDon.filter(h=>h.id!==id);save();renderAll();
     }
-    DB.hoaDon=DB.hoaDon.filter(h=>h.id!==id);save();renderAll();toast('Đã xóa hóa đơn');
+    toast('Đã xóa hóa đơn');
   }catch(e){toast('❌ Không xóa được hóa đơn')}
 }
 function printHDById(id){const h=DB.hoaDon.find(x=>x.id===id);if(h)printHD(h)}
