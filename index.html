@@ -58,6 +58,8 @@ tr.grp td{background:var(--primary-light);color:var(--primary-dark);font-weight:
 tr.grp:hover td{background:var(--primary-light)}
 .pctbar{background:var(--primary-light);border-radius:4px;height:9px;min-width:80px;overflow:hidden}
 .pctbar i{display:block;height:100%;background:var(--primary);border-radius:4px}
+.tlink{cursor:pointer;border-bottom:1px dashed var(--primary)}
+.tlink:hover{color:var(--primary-dark)}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .stat{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;border-top:3px solid var(--primary)}
 .stat.warn{border-top-color:var(--amber)}
@@ -147,7 +149,6 @@ body.role-nv .admin-only{display:none!important}
     <div class="logo"><h1>💊 Nhà thuốc</h1><p id="lgName">Quản lý bán hàng & kho</p></div>
     <button class="nav-btn active" data-page="dashboard"><span class="ico">📊</span>Tổng quan</button>
     <button class="nav-btn" data-page="pos"><span class="ico">🛒</span>Bán hàng</button>
-    <button class="nav-btn" data-page="thuoc"><span class="ico">💊</span>Thuốc</button>
     <button class="nav-btn admin-only" data-page="kho"><span class="ico">📦</span>Kho / Lô</button>
     <button class="nav-btn" data-page="hoadon"><span class="ico">🧾</span>Hóa đơn</button>
     <button class="nav-btn admin-only" data-page="thongke"><span class="ico">📈</span>Thống kê</button>
@@ -398,6 +399,7 @@ body.role-nv .admin-only{display:none!important}
     <div class="flex mt12">
       <button class="btn btn-primary" onclick="saveThuoc()">Lưu thuốc</button>
       <button class="btn btn-ghost" onclick="closeModal('mdThuoc')">Hủy</button>
+      <button class="btn btn-danger btn-sm right" id="btnXoaThuoc" style="display:none">🗑 Xóa thuốc</button>
     </div>
   </div>
 </div>
@@ -565,7 +567,7 @@ function applyRole(){
   document.body.classList.toggle('role-nv',!isAdmin());
   document.getElementById('cardUsersCloud').style.display=(CLOUD&&isAdmin())?'block':'none';
   document.getElementById('cardUsersLocal').style.display=(!CLOUD&&isAdmin())?'block':'none';
-  const allow=['dashboard','pos','thuoc','hoadon'];
+  const allow=['dashboard','pos','hoadon'];
   const cur=document.querySelector('.nav-btn.active');
   if(!isAdmin()&&cur&&!allow.includes(cur.dataset.page)){
     document.querySelector('.nav-btn[data-page="pos"]').click();
@@ -688,6 +690,9 @@ function openThuoc(id){
   fT_id.value=t?t.id:'';fT_ten.value=t?t.ten:'';fT_hc.value=t?t.hoatChat:'';
   fT_nhom.value=t&&t.nhom?t.nhom:'Khác';fT_dv.value=t?t.donVi:'';fT_gb.value=t?t.giaBan:'';
   fT_gn.value=t?t.giaNhap:'';fT_min.value=t?t.tonMin:10;
+  const bx=document.getElementById('btnXoaThuoc');
+  bx.style.display=(id&&isAdmin())?'inline-block':'none';
+  bx.onclick=()=>{closeModal('mdThuoc');delThuoc(id)};
   m.classList.add('open');fT_ten.focus();
 }
 async function saveThuoc(){
@@ -840,7 +845,7 @@ function renderKho(){
     const[st,cls]=statusLo(l);
     const gkc=l.giaKC??Math.round(l.giaNhap*1.3);
     const glt=l.giaLT??lamTron(gkc);
-    return `<tr><td><strong>${esc(l.t.ten)}</strong></td><td>${esc(l.soLo)}</td><td>${fmtD(l.ngayNhap)}</td>
+    return `<tr><td><strong class="${isAdmin()?'tlink':''}" ${isAdmin()?`onclick="openThuoc('${l.thuocId}')" title="Bấm để sửa thuốc"`:''}>${esc(l.t.ten)}</strong></td><td>${esc(l.soLo)}</td><td>${fmtD(l.ngayNhap)}</td>
     <td>${fmtD(l.hanDung)}</td><td class="num">${fmt(l.giaNhap)}</td>
     <td class="num small">${fmt(gkc)}</td>
     <td class="num"><strong style="color:var(--primary-dark)">${fmt(glt)}</strong></td>
