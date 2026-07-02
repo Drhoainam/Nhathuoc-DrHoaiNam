@@ -766,14 +766,15 @@ function openNhap(){
   // Dropdown: option "thuốc mới" đứng đầu + danh mục gộp theo nhóm
   const thuTu=dsNhomAll();const grp={};
   DB.thuoc.forEach(t=>{const n=t.nhom||'Khác';(grp[n]=grp[n]||[]).push(t)});
-  sel.innerHTML=`<option value="__new__">＋ Thêm thuốc mới…</option>`+
+  sel.innerHTML=`<option value="">— Chọn thuốc —</option>`+
+    `<option value="__new__">＋ Thêm thuốc mới…</option>`+
     Object.keys(grp).sort((a,b)=>thuTu.indexOf(a)-thuTu.indexOf(b)).map(n=>
     `<optgroup label="${nhomIcon(n)} ${esc(n)}">`+
     grp[n].sort((a,b)=>a.ten.localeCompare(b.ten,'vi')).map(t=>
       `<option value="${t.id}">${esc(t.ten)} (${esc(t.donVi)})</option>`).join('')+
     `</optgroup>`).join('');
-  // Nếu đã có thuốc thì mặc định chọn thuốc đầu tiên, chưa có thì vào thẳng chế độ thuốc mới
-  if(DB.thuoc.length)sel.selectedIndex=1;
+  // Mặc định để trống — chưa có thuốc nào thì vào thẳng chế độ thuốc mới
+  if(!DB.thuoc.length)sel.value='__new__';
   fN_lo.value='';fN_hsd.value='';fN_sl.value='';fN_gn.value='';fN_gkc.value='';fN_glt.value='';
   fNew_ten.value='';fNew_hc.value='';fNew_dv.value='';fNew_min.value=10;
   fNew_nhom.innerHTML=dsNhomAll().map(n=>`<option value="${esc(n)}">${nhomIcon(n)} ${esc(n)}</option>`).join('');
@@ -785,8 +786,13 @@ function openNhap(){
     const moi=sel.value==='__new__';
     const info=document.getElementById('fN_info');
     newWrap.style.display=moi?'block':'none';
-    // Đổi thuốc → xóa sạch thông tin lô cũ để tránh nhập nhầm
+    // Đổi lựa chọn → xóa sạch thông tin lô cũ để tránh nhập nhầm
     fN_lo.value='';fN_hsd.value='';fN_sl.value='';
+    if(!sel.value){ // chưa chọn gì — form trắng
+      info.style.display='none';
+      fN_gn.value='';fN_gkc.value='';fN_glt.value='';
+      return;
+    }
     if(moi){
       info.style.display='none';
       fN_gn.value='';tinhGia();fNew_ten.focus();
@@ -806,6 +812,7 @@ function openNhap(){
 }
 let DANG_NHAP=false;
 async function saveNhap(nhapTiep){
+  if(!fN_thuoc.value){toast('Chưa chọn thuốc');return}
   const hsd=fN_hsd.value,sl=parseInt(fN_sl.value),gn=parseFloat(fN_gn.value);
   const gkc=parseFloat(fN_gkc.value)||Math.round(gn*1.3);
   const glt=parseFloat(fN_glt.value)||lamTron(gkc);
